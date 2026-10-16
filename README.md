@@ -5,7 +5,9 @@
 
 ## Libraries
 libcurl - for requesting data from a local docker-hosted instance of Overpass API
+
 json (by nlohmann) - for parsing the output from OverpassAPI
+
 proj - for cartographic projections (For Romania - WGS84 to Stereo70)
 
 ## Features (as of yet)
