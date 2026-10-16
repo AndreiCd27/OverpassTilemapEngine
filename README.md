@@ -18,4 +18,34 @@ Using the local endpoint for fast queries at large scale, targeting highways, st
 
 ## Setup
 
-### Download 
+### Docker
+To create a clone of the OverpassAPI locally, scoped down to a specific region, you first need to
+download a .pbf file from Geofabrik (https://download.geofabrik.de/)
+
+Next, convert the downloaded .pbf file into a .bz2 file and rename as "planet.osm.bz2"
+
+Example:
+```
+osmium cat romania-latest.osm.pbf -o planet.osm.bz2
+```
+
+Then create a directory where the database will be stored and run the following docker command:
+
+```
+docker run -d \
+  --name your_overpass_instance_name \
+  --restart always \
+  -p 12345:80 \
+  -v "/path/to/directory/db:/db" \
+  wiktorn/overpass-api
+```
+
+After the command finished, check it was created and the ngnix deamon started, ready to query
+```
+docker logs -f your_overpass_instance_name
+```
+
+### Build process
+
+Simply run the CMakelists.txt file
+(Testing on Linux and MacOS for compatibility soon)
