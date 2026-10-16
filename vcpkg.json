@@ -1,0 +1,10 @@
+{
+  "name": "overpass-tilemap-engine",
+  "version-string": "1.0.0",
+  "builtin-baseline": "3cd21e48a75f67acfef289da52893ce79144aaa1",
+  "dependencies": [
+    "curl",
+    "nlohmann-json",
+    "proj"
+  ]
+}
