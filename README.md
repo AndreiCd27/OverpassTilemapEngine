@@ -49,3 +49,14 @@ docker logs -f your_overpass_instance_name
 
 Simply run the CMakelists.txt file
 (Testing on Linux and MacOS for compatibility soon)
+
+### Rendering
+
+Working on a fast renderer directly in the C++ application, using OpenGL
+
+Example render using luau scripts (read from file)
+![Bucharest_Render](https://github.com/AndreiCd27/OverpassTilemapEngine/media/render.png)
+
+Binary files for the region can be found at https://github.com/AndreiCd27/OverpassTilemapEngine/app_output/sample_bucharest_ilfov_region
+	- 3268 KB for Bucharest-Ilfov vector data
+	- 130 KB for Road Name Buffer
