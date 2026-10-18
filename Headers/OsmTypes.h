@@ -22,7 +22,9 @@ namespace osm {
 	struct Packed_Node {
 		uint16_t x;
 		uint16_t y;
-		float elevation = 0.0f;
+		int16_t elevation = 0;
+		int8_t chk_offset_x = 0;
+		int8_t chk_offset_y = 0;
 	};
 #pragma pack(pop)
 
@@ -32,11 +34,11 @@ namespace osm {
 		uint32_t first_node_index;
 		uint16_t name_idx;
 		uint8_t nr_of_nodes;
-		uint8_t neighbour_chunk_id;
 		uint8_t type_of_way;
 		uint8_t bucket0;
 		uint8_t bucket1;
 		uint8_t bucket2;
+		uint8_t bucket3;
 	};
 #pragma pack(pop)
 

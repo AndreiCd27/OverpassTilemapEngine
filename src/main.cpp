@@ -5,9 +5,13 @@
 #include "OsmPack.h"
 #include "ChunkManager.h"
 
-
 #include <string>
 #include <filesystem>
+
+
+#include <fstream>
+
+std::ofstream fout("log.txt");
 
 constexpr int divChunk = 16;
 
@@ -42,8 +46,13 @@ int main() {
 	osm::OSM_Parser_Storage parser;
 
 	auto init_chk = chunk_manager.MakeChunk_at(xi_global, yi_global, nullptr);
-	std::cout << "X0 : " << init_chk.Bounds_m.x0 << ", Y0 : " << init_chk.Bounds_m.y0 << "\n";
-
+	int _x0 = init_chk.Bounds_m.x0;
+	int _y0 = init_chk.Bounds_m.y0;
+	int _x1 = init_chk.Bounds_m.x1;
+	int _y1 = init_chk.Bounds_m.y1;
+	std::cout << "X0 : " << _x0 << ", Y0 : " << _y0 << "\n";
+	std::cout << "X1 : " << _x1 << ", Y1 : " << _y1 << "\n";
+	std::cout << "Xsize : " << _x1 - _x0 << ", Ysize : " << _y1 - _y0 << "\n";
 
 	double mega_min_lat, mega_min_lon, mega_max_lat, mega_max_lon;
 	T.stereo_to_wgs(init_chk.Bounds_m.x0, init_chk.Bounds_m.y0, mega_min_lat, mega_min_lon);
@@ -71,7 +80,7 @@ int main() {
 			std::string readBuffer = wrapper.PostUrl(url, query);
 
 			if (!readBuffer.empty() && readBuffer[0] == '<') {
-				//std::cerr << "Received HTML instead of JSON: " << readBuffer << "\n";
+				std::cerr << "Received HTML instead of JSON \n";
 			}
 
 			parser.ParseJSON(readBuffer);
@@ -86,7 +95,7 @@ int main() {
 
 	std::cout << "Packing OSM data ...\n";
 
-	osm::OSM_Packed_Storage<2> osmpack{ parser, chunk_manager };
+	osm::OSM_Packed_Storage<2> osmpack{ parser, chunk_manager, xi_global, yi_global };
 
 	std::cout << "Writing Packed OSM data ...\n";
 
@@ -102,22 +111,49 @@ int main() {
 
 	int err_cnt = 0;
 	std::vector<osm::Packed_Way_Header> err_obj_catch;
-
 	const auto& ways_store = osmpack.GetWaysStorage();
-	std::cout << ways_store.size() << " : Ways Storage Size\n";
+	fout << ways_store.size() << " : Ways Storage Size\n"; // Will print 256
+
 	for (int i = 0; i < ways_store.size(); i++) {
 		const auto& chunk_ways_store = ways_store[i];
-		for (const auto& way : chunk_ways_store) {
-			std::cout << int(way.nr_of_nodes) << " : Number of nodes\n";
-			std::cout << int(way.name_idx) << " : Road Index\n";
-			try {
-				const auto& name = out_names.get_name(int(way.name_idx));
-				std::cout << name << " : Road Name\n";
+
+		if (chunk_ways_store.size() > 0) {
+			// Extract indices purely within the local 256 matrix limits
+			int subX = i & 0xF;
+			int subZ = (i >> 4) & 0xF;
+
+			// Human readable print logs tracking your targeted 9,4 bounds region
+			fout << "WAYCHK: [Mega " << xi_global << "," << yi_global << "] "
+				<< "-> [Sub " << subX << "," << subZ << "] "
+				<< "(Local Idx: " << i << ") | "
+				<< chunk_ways_store.size() << " ways\n";
+
+			for (const auto& way : chunk_ways_store) {
+				try {
+					const auto& name = out_names.get_name(int(way.name_idx));
+				}
+				catch (...) {
+					err_cnt++;
+					err_obj_catch.push_back(way);
+				}
 			}
-			catch (...) {
-				err_cnt++;
-				err_obj_catch.push_back(way);
-			}
+		}
+	}
+
+	const auto& out_nodes = osmpack.GetNodeStorage();
+	for (int i = 0; i < out_nodes.size(); i++) {
+		if (out_nodes[i].size() > 0) {
+			// Decodare identică și pentru noduri
+			int megaX = (i >> 12) & 0xF;
+			int megaZ = (i >> 8) & 0xF;
+			int subX = (i >> 4) & 0xF;
+			int subZ = i & 0xF;
+			int localSubIdx = (subZ << 4) | subX;
+
+			fout << "NDCHK: [Mega " << megaX << "," << megaZ << "] "
+				<< "-> [Sub " << subX << "," << subZ << "] "
+				<< "(Local Idx: " << localSubIdx << ") | "
+				<< out_nodes[i].size() << " nodes\n";
 		}
 	}
 
@@ -132,6 +168,8 @@ int main() {
 
 	// Clean up global libcurl state
 	curl_global_cleanup();
+
+	fout.close();
 
 	std::cout << "\nENTER to close..." << std::endl;
 	std::cin.get();
