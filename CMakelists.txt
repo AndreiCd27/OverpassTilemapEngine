@@ -10,6 +10,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(nlohmann_json REQUIRED)
 find_package(PROJ REQUIRED)
 find_package(CURL REQUIRED)
+find_package(lz4 CONFIG REQUIRED)
+
 
 set(HEADER_FILES 
 	Headers/ChunkManager.h
@@ -18,6 +20,7 @@ set(HEADER_FILES
 	Headers/OsmParse.h
 	Headers/OsmTypes.h
 	Headers/Request.h
+	Headers/LZ4_Compression.h
 )
 
 add_executable(${CMAKE_PROJECT_NAME}
@@ -36,4 +39,5 @@ target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
     nlohmann_json::nlohmann_json
     PROJ::proj
     CURL::libcurl
+	lz4::lz4
 )

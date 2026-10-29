@@ -62,12 +62,23 @@ namespace osm {
 		}
 	};
 
+	// Chunk Size, set to 2^16 to fit fully on unsigned 16 bits
+	constexpr int CHK_SIZE = 65536;
+
+	// Number of subchunks on X and Y axis
+	constexpr int CHK_CNT = 16;
+
+	// How many buckets on X and Y axis to sort the way headers at the lowest chunk level
+	constexpr int num_buckets = 4;
+
 	template <int NumLayers>
 	class OSM_Packed_Storage {
-		// Exactly 256 subchunks (16x16 grid) for the current active region
+		// CHK_CNT x CHK_CNT grid of subchunks for the current active region
 		std::vector<std::vector<Packed_Way_Header>> flat_ways_storage;
 		std::vector<std::vector<Packed_Node>>       flat_nodes_storage;
 		std::vector<std::vector<uint16_t>>          flat_connections_storage;
+
+		std::vector<std::vector<uint16_t>> BucketArray;
 
 		// Track which global megachunk this storage context belongs to
 		int current_megaX = -1;
@@ -85,14 +96,70 @@ namespace osm {
 			return (subZ << 4) | subX;
 		}
 
+		void SortChunkInBuckets(std::vector<std::vector<uint16_t>>& BucketArray) {
+
+			// Categorize and sort way headers (based on first node location) in buckets
+			// Buckets are local mini-chunks, splitting a sub-chunk even more without boundary calculations
+			// This uses Counting Sort
+
+			// Puts in BucketArray offsets for every bucket
+
+			for (int chk_i = 0; chk_i < flat_ways_storage.size(); chk_i++) {
+				auto& chunk_way_headers = flat_ways_storage[chk_i];
+				if (chunk_way_headers.empty()) continue;
+
+				size_t bucket_counts[num_buckets * num_buckets] = { 0 };
+
+				// Stores bucket indices (defined as b_idx below) to map every way header index to one
+				std::vector<uint8_t> wayheader_buckets(chunk_way_headers.size());
+
+				for (size_t i = 0; i < chunk_way_headers.size(); i++) {
+					uint16_t con = flat_connections_storage[chk_i][chunk_way_headers[i].first_node_index];
+					const auto& nd = flat_nodes_storage[chk_i][con];
+
+					int b_idx = (nd.x / (CHK_SIZE / num_buckets)) * 4 + (nd.y / (CHK_SIZE / num_buckets));
+					wayheader_buckets[i] = b_idx;
+					bucket_counts[b_idx]++;
+				}
+
+				// Calculate offsets for the final vector
+				uint16_t bucket_offsets[16];
+				bucket_offsets[0] = 0;
+				for (int i = 1; i < 16; i++) {
+					bucket_offsets[i] = bucket_offsets[i - 1] + bucket_counts[i - 1];
+				}
+
+				// Copy bucket_offsets into BucketArray[chunk_index]
+				for (uint16_t off : bucket_offsets) {
+					BucketArray[chk_i].push_back(off);
+				}
+
+				// Temporary vector
+				std::vector<Packed_Way_Header> sorted_way_headers(chunk_way_headers.size());
+
+				for (size_t i = 0; i < chunk_way_headers.size(); i++) {
+					int b_idx = wayheader_buckets[i];
+					size_t dest_pos = bucket_offsets[b_idx];
+
+					sorted_way_headers[dest_pos] = chunk_way_headers[i];
+					bucket_offsets[b_idx]++;
+				}
+
+				// Make the global way header vector get the sorted data without copying
+				chunk_way_headers = std::move(sorted_way_headers);
+			}
+		}
+
 	public:
 		OSM_Packed_Storage(const OSM_Parser_Storage& parser_storage, const ChunkManager& chunk_manager, int megaX, int megaZ)
 			: current_megaX(megaX), current_megaZ(megaZ)
 		{
-			// Pre-allocate exactly 256 entries
-			flat_ways_storage.resize(256);
-			flat_nodes_storage.resize(256);
-			flat_connections_storage.resize(256);
+			// Pre-allocate exactly CHK_CNT * CHK_CNT entries
+			flat_ways_storage.resize(CHK_CNT * CHK_CNT);
+			flat_nodes_storage.resize(CHK_CNT * CHK_CNT);
+			flat_connections_storage.resize(CHK_CNT * CHK_CNT);
+
+			BucketArray.resize(CHK_CNT * CHK_CNT);
 
 			OSM_Chunk_Layout<NumLayers> layout(chunk_manager);
 
@@ -125,8 +192,8 @@ namespace osm {
 				double norm_y = (stereo_y - leaf_meta.Bounds_m.y0) / (leaf_meta.Bounds_m.y1 - leaf_meta.Bounds_m.y0);
 
 				Packed_Node packed_node;
-				packed_node.x = static_cast<uint16_t>(norm_x * 65535.0);
-				packed_node.y = static_cast<uint16_t>(norm_y * 65535.0);
+				packed_node.x = static_cast<uint16_t>(norm_x * float(CHK_SIZE - 1));
+				packed_node.y = static_cast<uint16_t>(norm_y * float(CHK_SIZE - 1));
 				packed_node.elevation = 0;
 				packed_node.chk_offset_x = 0;
 				packed_node.chk_offset_y = 0;
@@ -281,6 +348,9 @@ namespace osm {
 					current_way_header->nr_of_nodes++;
 				}
 			}
+
+			// Sort way headers in buckets for faster localization
+			SortChunkInBuckets(BucketArray);
 		}
 
 		void WriteToDisk(const std::string& outputFolder, const NameBuffer& name_buffer) {
@@ -325,8 +395,8 @@ namespace osm {
 			uint32_t fileVersion = 1;
 			file.write(reinterpret_cast<char*>(&fileVersion), 4);
 
-			// Local Lookup Table (256 slots)
-			std::vector<uint64_t> lookupTable(256, 0ULL);
+			// Local Lookup Table (CHK_CNT * CHK_CNT slots)
+			std::vector<uint64_t> lookupTable(CHK_CNT * CHK_CNT, 0ULL);
 			uint64_t lutPosition = file.tellp();
 			file.write(reinterpret_cast<char*>(lookupTable.data()), lookupTable.size() * sizeof(uint64_t));
 
@@ -353,6 +423,9 @@ namespace osm {
 					file.write(reinterpret_cast<char*>(&wayCount), 4);
 					file.write(reinterpret_cast<char*>(&connCount), 4);
 
+					uint32_t total_buckets = num_buckets * num_buckets;
+					file.write(reinterpret_cast<const char*>(&total_buckets), 4);
+
 					if (nodeCount > 0) {
 						file.write(reinterpret_cast<const char*>(nodes.data()), nodes.size() * sizeof(Packed_Node));
 					}
@@ -362,6 +435,10 @@ namespace osm {
 					if (wayCount > 0) {
 						file.write(reinterpret_cast<const char*>(ways.data()), ways.size() * sizeof(Packed_Way_Header));
 					}
+
+					const auto& bucket_offsets = BucketArray[idx1D];
+					file.write(reinterpret_cast<const char*>(bucket_offsets.data()), bucket_offsets.size() * sizeof(uint16_t));
+					
 				}
 			}
 
@@ -371,10 +448,10 @@ namespace osm {
 		}
 
 		bool ReadFromDisk(const std::string& inputFolder, NameBuffer& out_global_name_buffer) {
-			// Clear and resize structures to local grid size (256)
-			flat_ways_storage.assign(256, std::vector<Packed_Way_Header>());
-			flat_nodes_storage.assign(256, std::vector<Packed_Node>());
-			flat_connections_storage.assign(256, std::vector<uint16_t>());
+			// Clear and resize structures to local grid size (CHK_CNT * CHK_CNT)
+			flat_ways_storage.assign(CHK_CNT * CHK_CNT, std::vector<Packed_Way_Header>());
+			flat_nodes_storage.assign(CHK_CNT * CHK_CNT, std::vector<Packed_Node>());
+			flat_connections_storage.assign(CHK_CNT * CHK_CNT, std::vector<uint16_t>());
 
 			// Unpack Names
 			std::string globalNamesFile = inputFolder + "/global_names.bin";
@@ -413,7 +490,7 @@ namespace osm {
 			char magic[4]; file.read(magic, 4);
 			uint32_t fileVersion = 0; file.read(reinterpret_cast<char*>(&fileVersion), 4);
 
-			std::vector<uint64_t> lookupTable(256, 0ULL);
+			std::vector<uint64_t> lookupTable(CHK_CNT * CHK_CNT, 0ULL);
 			file.read(reinterpret_cast<char*>(lookupTable.data()), lookupTable.size() * sizeof(uint64_t));
 			for (int subX = 0; subX < 16; subX++) {
 				for (int subZ = 0; subZ < 16; subZ++) {
@@ -421,10 +498,11 @@ namespace osm {
 					uint64_t chunkOffset = lookupTable[lutIndex];
 					if (chunkOffset == 0ULL) continue;
 					file.seekg(chunkOffset);
-					uint32_t nodeCount = 0, wayCount = 0, connCount = 0;
+					uint32_t nodeCount = 0, wayCount = 0, connCount = 0, bucketCount = 0;
 					file.read(reinterpret_cast<char*>(&nodeCount), 4);
 					file.read(reinterpret_cast<char*>(&wayCount), 4);
 					file.read(reinterpret_cast<char*>(&connCount), 4);
+					file.read(reinterpret_cast<char*>(&bucketCount), 4);
 					uint32_t idx1D = (subZ << 4) | subX; // 0..255
 					if (nodeCount > 0) {
 						flat_nodes_storage[idx1D].resize(nodeCount);
@@ -438,6 +516,7 @@ namespace osm {
 						flat_ways_storage[idx1D].resize(wayCount);
 						file.read(reinterpret_cast<char*>(flat_ways_storage[idx1D].data()), wayCount * sizeof(Packed_Way_Header));
 					}
+					file.read(reinterpret_cast<char*>(BucketArray[idx1D].data()), bucketCount * sizeof(uint16_t));
 				}
 			}
 			file.close();

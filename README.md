@@ -15,6 +15,8 @@ proj - for cartographic projections (For Romania - WGS84 to Stereo70)
 Organizing roads in a quadtree-like structure, allowing fast streaming of geographical regions in games, simulations etc.
 ### OverpassQL queries
 Using the local endpoint for fast queries at large scale, targeting highways, streets and footways
+### LZ4 Compression on binary files
+Using LZ4 to compress road data and road-name buffers even more, achieving about 30-50% reduction in file size
 
 ## Setup
 
@@ -57,9 +59,6 @@ Working on a fast renderer directly in the C++ application, using OpenGL
 Example render using luau scripts (read from file)
 ![Bucharest_Render](https://github.com/AndreiCd27/OverpassTilemapEngine/blob/main/media/render.png)
 
-Binary files for the region can be found at app_output/sample_bucharest_ilfov_region
-
+Binary files for the region can be found at https://github.com/AndreiCd27/OverpassTilemapEngine/app_output/sample_bucharest_ilfov_region
 	- 3268 KB for Bucharest-Ilfov vector data
-(51.2 km * 51.2 km region)
-
 	- 130 KB for Road Name Buffer

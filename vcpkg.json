@@ -5,6 +5,7 @@
   "dependencies": [
     "curl",
     "nlohmann-json",
-    "proj"
+    "proj",
+    "lz4"
   ]
 }

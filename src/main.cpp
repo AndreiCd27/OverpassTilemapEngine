@@ -4,6 +4,7 @@
 #include "OsmParse.h"
 #include "OsmPack.h"
 #include "ChunkManager.h"
+#include "LZ4_Compression.h"
 
 #include <string>
 #include <filesystem>
@@ -143,7 +144,6 @@ int main() {
 	const auto& out_nodes = osmpack.GetNodeStorage();
 	for (int i = 0; i < out_nodes.size(); i++) {
 		if (out_nodes[i].size() > 0) {
-			// Decodare identică și pentru noduri
 			int megaX = (i >> 12) & 0xF;
 			int megaZ = (i >> 8) & 0xF;
 			int subX = (i >> 4) & 0xF;
@@ -164,6 +164,31 @@ int main() {
 		std::cout << " | " << int(w.name_idx) << " : Name Index \n";
 	}
 	
+	try {
+		// Compress vector data binary using LZ4
+		std::string bin_file_name = std::format("ChunkData/megachunk_{}_{}.bin", xi_global, yi_global);
+		std::vector<char> compressedData = CompressFileLZ4(bin_file_name);
+
+		std::string lz4_file_name = std::format("ChunkData/megachunk_{}_{}.lz4", xi_global, yi_global);
+		std::ofstream outFile(lz4_file_name, std::ios::binary);
+		outFile.write(compressedData.data(), compressedData.size());
+		outFile.close();
+
+		std::cout << "Vector data file compressed successfully via LZ4!\n";
+
+		// Compress name buffer binary using LZ4
+		std::vector<char> compressedData_names = CompressFileLZ4("ChunkData/global_names.bin");
+
+		std::ofstream outFile_names("ChunkData/global_names.lz4", std::ios::binary);
+		outFile_names.write(compressedData_names.data(), compressedData_names.size());
+		outFile_names.close();
+
+		std::cout << "Name buffer file compressed successfully via LZ4!\n";
+	}
+	catch (const std::exception& e) {
+		std::cerr << "Error: " << e.what() << "\n";
+	}
+
 	//ExportGlobalWorld("ChunkData/world.bin", all_chunks);
 
 	// Clean up global libcurl state
