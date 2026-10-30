@@ -4,6 +4,10 @@
 
 using namespace osm;
 
+static int rail_number = 0;
+static int tram_number = 0;
+
+
 void OSM_Parser_Storage::ParseJSON(const std::string & rawJsonString) {
 
     using json = nlohmann::json;
@@ -36,7 +40,28 @@ void OSM_Parser_Storage::ParseJSON(const std::string & rawJsonString) {
 
                     if (element.contains("tags")) {
                         const auto& tags = element["tags"];
-                        if (tags.contains("highway")) {
+
+                        if (tags.contains("tram") && tags["tram"].get<std::string>() == "yes") {
+                            tram_number++;
+                            typeOfRoadCode = 255; // TRAM (Shared with car traffic)
+                        }
+                        else if (tags.contains("railway")) {
+                            std::string railType = tags["railway"].get<std::string>();
+
+                            if (railType == "rail" || railType == "track") {
+                                rail_number++;
+                                typeOfRoadCode = 254; // TRAIN TRACK
+                            }
+                            else if (railType == "tram") {
+                                tram_number++;
+                                typeOfRoadCode = 255; // TRAM TRACK
+                            }
+                            else {
+                                //std::cout << railType << " ";
+                                typeOfRoadCode = 253; // other track state
+                            }
+                        }
+                        else if (tags.contains("highway")) {
                             std::string hwType = tags["highway"].get<std::string>();
 
                             if (hwType == "motorway" || hwType == "trunk") {
@@ -48,8 +73,14 @@ void OSM_Parser_Storage::ParseJSON(const std::string & rawJsonString) {
                             else if (hwType == "pedestrian") {
                                 typeOfRoadCode = 3; // Pedestrian
                             }
-                            else if (hwType == "footway" || hwType == "path") {
+                            else if (hwType == "footway") {
                                 typeOfRoadCode = 4; // Park alley
+                            }
+                            else if (hwType == "path") {
+                                typeOfRoadCode = 5; // Path
+                            }
+                            else if (hwType == "residential") {
+                                typeOfRoadCode = 6; // Residential
                             }
                         }
                     }
@@ -141,4 +172,6 @@ void OSM_Parser_Storage::ParseJSON(const std::string & rawJsonString) {
     catch (const std::exception& e) {
         std::cerr << "JSON Exception: " << e.what() << "\n";
     }
+
+    //std::cout << "TRAM NUMBER: " << tram_number << " " << "RAIL NUMBER: " << rail_number << "\n";
 }

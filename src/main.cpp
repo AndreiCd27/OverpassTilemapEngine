@@ -23,8 +23,10 @@ static std::string GetQuery(double lat0, double lon0, double lat1, double lon1) 
 		lat0, lon0, lat1, lon1);
 	std::string bbox(bbox_buf);
 	return "[out:json][timeout:90];\n"
-		"(way[\"highway\"~\"^(motorway|trunk|primary|secondary|tertiary|residential|pedestrian|footway|path)$\"]("
-		+ bbox + "););\n"
+		"(\n"
+		"  way[\"highway\"~\"^(motorway|trunk|primary|secondary|tertiary|residential|pedestrian|footway|path)$\"](" + bbox + ");\n"
+		"  way[\"railway\"~\"^(rail|tram|track)$\"](" + bbox + ");\n"
+		");\n"
 		"out body geom;";
 }
 
