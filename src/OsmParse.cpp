@@ -6,6 +6,7 @@ using namespace osm;
 
 static int rail_number = 0;
 static int tram_number = 0;
+static int construction_number = 0;
 
 
 void OSM_Parser_Storage::ParseJSON(const std::string & rawJsonString) {
@@ -41,7 +42,13 @@ void OSM_Parser_Storage::ParseJSON(const std::string & rawJsonString) {
                     if (element.contains("tags")) {
                         const auto& tags = element["tags"];
 
-                        if (tags.contains("tram") && tags["tram"].get<std::string>() == "yes") {
+                        if (tags.contains("railway") && (tags["railway"].get<std::string>() == "construction" ||
+                            tags["railway"].get<std::string>() == "disused") && tags.value("operator", "") == "STB") {
+
+                            construction_number++;
+                            typeOfRoadCode = 253; // TRAM IN CONSTRUCTION OR DISUSED
+                        }
+                        else if (tags.contains("tram") && tags["tram"].get<std::string>() == "yes") {
                             tram_number++;
                             typeOfRoadCode = 255; // TRAM (Shared with car traffic)
                         }
@@ -58,7 +65,7 @@ void OSM_Parser_Storage::ParseJSON(const std::string & rawJsonString) {
                             }
                             else {
                                 //std::cout << railType << " ";
-                                typeOfRoadCode = 253; // other track state
+                                typeOfRoadCode = 250; // other track state
                             }
                         }
                         else if (tags.contains("highway")) {
@@ -173,5 +180,6 @@ void OSM_Parser_Storage::ParseJSON(const std::string & rawJsonString) {
         std::cerr << "JSON Exception: " << e.what() << "\n";
     }
 
-    //std::cout << "TRAM NUMBER: " << tram_number << " " << "RAIL NUMBER: " << rail_number << "\n";
+    std::cout << "TRAM NUMBER: " << tram_number << " " << "RAIL NUMBER: " << rail_number
+        << " UNDER CONSTRUCTION: " << construction_number << "\n";
 }
