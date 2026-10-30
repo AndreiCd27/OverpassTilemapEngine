@@ -32,7 +32,7 @@ void OSM_Parser_Storage::ParseJSON(const std::string & rawJsonString) {
                         streetName = element["tags"]["name"];
                     }
 
-                    uint8_t typeOfRoadCode = 0; // 0 = Drum auto implicit (residential, etc.)
+                    uint8_t typeOfRoadCode = 0;
 
                     if (element.contains("tags")) {
                         const auto& tags = element["tags"];
@@ -40,16 +40,16 @@ void OSM_Parser_Storage::ParseJSON(const std::string & rawJsonString) {
                             std::string hwType = tags["highway"].get<std::string>();
 
                             if (hwType == "motorway" || hwType == "trunk") {
-                                typeOfRoadCode = 1; // Autostrăzi / Drumuri expres
+                                typeOfRoadCode = 1; // Highways
                             }
                             else if (hwType == "primary" || hwType == "secondary" || hwType == "tertiary") {
-                                typeOfRoadCode = 2; // Drumuri principale / Bulevarde
+                                typeOfRoadCode = 2; // Boulevards
                             }
                             else if (hwType == "pedestrian") {
-                                typeOfRoadCode = 3; // Zonă pietonală urbană
+                                typeOfRoadCode = 3; // Pedestrian
                             }
                             else if (hwType == "footway" || hwType == "path") {
-                                typeOfRoadCode = 4; // Alee pietonală / Potecă parcuri
+                                typeOfRoadCode = 4; // Park alley
                             }
                         }
                     }

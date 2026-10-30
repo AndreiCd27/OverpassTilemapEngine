@@ -114,10 +114,21 @@ namespace osm {
 				std::vector<uint8_t> wayheader_buckets(chunk_way_headers.size());
 
 				for (size_t i = 0; i < chunk_way_headers.size(); i++) {
-					uint16_t con = flat_connections_storage[chk_i][chunk_way_headers[i].first_node_index];
-					const auto& nd = flat_nodes_storage[chk_i][con];
+					int nr_nd = chunk_way_headers[i].nr_of_nodes;
+					uint32_t fst_idx = chunk_way_headers[i].first_node_index;
+					int ndx = 0, ndy = 0;
 
-					int b_idx = (nd.x / (CHK_SIZE / num_buckets)) * 4 + (nd.y / (CHK_SIZE / num_buckets));
+					for (int i = 0; i < nr_nd; i++) {
+						uint16_t con = flat_connections_storage[chk_i][fst_idx + i];
+						const auto& nd = flat_nodes_storage[chk_i][con];
+						if (nd.chk_offset_x == 0 && nd.chk_offset_y == 0) {
+							ndx += nd.x;
+							ndy += nd.y;
+						}
+					}
+					ndx /= nr_nd; ndy /= nr_nd;
+
+					int b_idx = (ndx / (CHK_SIZE / num_buckets)) * 4 + (ndy / (CHK_SIZE / num_buckets));
 					wayheader_buckets[i] = b_idx;
 					bucket_counts[b_idx]++;
 				}
