@@ -21,6 +21,8 @@ set(HEADER_FILES
 	Headers/OsmTypes.h
 	Headers/Request.h
 	Headers/LZ4_Compression.h
+	Headers/HeightmapOperations.h
+	Headers/FFT_2D.h
 )
 
 add_executable(${CMAKE_PROJECT_NAME}

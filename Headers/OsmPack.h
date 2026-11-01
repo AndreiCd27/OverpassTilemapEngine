@@ -3,6 +3,7 @@
 #include "OsmParse.h"
 #include "OsmTypes.h"
 #include "ChunkManager.h"
+#include "HeightmapOperations.h"
 
 #include <vector>
 #include <cmath>
@@ -364,7 +365,9 @@ namespace osm {
 			SortChunkInBuckets(BucketArray);
 		}
 
-		void WriteToDisk(const std::string& outputFolder, const NameBuffer& name_buffer) {
+		void WriteToDisk(const std::string& outputFolder, const NameBuffer& name_buffer,
+			const Heightmap_Storage& heightmap_storage) {
+
 			std::filesystem::create_directories(outputFolder);
 
 			// Save Global Name Buffer
@@ -420,6 +423,7 @@ namespace osm {
 					const auto& nodes = flat_nodes_storage[idx1D];
 					const auto& ways = flat_ways_storage[idx1D];
 					const auto& connections = flat_connections_storage[idx1D];
+					const auto& heightmap = heightmap_storage.GetAtIndex(idx1D);
 
 					if (nodes.empty() && ways.empty()) continue;
 
@@ -429,13 +433,14 @@ namespace osm {
 					uint32_t nodeCount = static_cast<uint32_t>(nodes.size());
 					uint32_t wayCount = static_cast<uint32_t>(ways.size());
 					uint32_t connCount = static_cast<uint32_t>(connections.size());
+					uint32_t total_buckets = num_buckets * num_buckets;
+					uint32_t heightmapCoeffCount = static_cast<uint32_t>(heightmap.size());
 
 					file.write(reinterpret_cast<char*>(&nodeCount), 4);
 					file.write(reinterpret_cast<char*>(&wayCount), 4);
 					file.write(reinterpret_cast<char*>(&connCount), 4);
-
-					uint32_t total_buckets = num_buckets * num_buckets;
 					file.write(reinterpret_cast<const char*>(&total_buckets), 4);
+					file.write(reinterpret_cast<char*>(&heightmapCoeffCount), 4);
 
 					if (nodeCount > 0) {
 						file.write(reinterpret_cast<const char*>(nodes.data()), nodes.size() * sizeof(Packed_Node));
@@ -450,6 +455,8 @@ namespace osm {
 					const auto& bucket_offsets = BucketArray[idx1D];
 					file.write(reinterpret_cast<const char*>(bucket_offsets.data()), bucket_offsets.size() * sizeof(uint16_t));
 					
+					file.write(reinterpret_cast<const char*>(heightmap.data()), heightmap.size() * sizeof(FFT2D::FourierTerm));
+
 				}
 			}
 
@@ -458,7 +465,9 @@ namespace osm {
 			file.close();
 		}
 
-		bool ReadFromDisk(const std::string& inputFolder, NameBuffer& out_global_name_buffer) {
+		bool ReadFromDisk(const std::string& inputFolder, NameBuffer& out_global_name_buffer,
+			Heightmap_Storage& heightmap_storage) {
+
 			// Clear and resize structures to local grid size (CHK_CNT * CHK_CNT)
 			flat_ways_storage.assign(CHK_CNT * CHK_CNT, std::vector<Packed_Way_Header>());
 			flat_nodes_storage.assign(CHK_CNT * CHK_CNT, std::vector<Packed_Node>());
@@ -509,11 +518,12 @@ namespace osm {
 					uint64_t chunkOffset = lookupTable[lutIndex];
 					if (chunkOffset == 0ULL) continue;
 					file.seekg(chunkOffset);
-					uint32_t nodeCount = 0, wayCount = 0, connCount = 0, bucketCount = 0;
+					uint32_t nodeCount = 0, wayCount = 0, connCount = 0, bucketCount = 0, heightmapCoeffCount = 0;
 					file.read(reinterpret_cast<char*>(&nodeCount), 4);
 					file.read(reinterpret_cast<char*>(&wayCount), 4);
 					file.read(reinterpret_cast<char*>(&connCount), 4);
 					file.read(reinterpret_cast<char*>(&bucketCount), 4);
+					file.read(reinterpret_cast<char*>(&heightmapCoeffCount), 4);
 					uint32_t idx1D = (subZ << 4) | subX; // 0..255
 					if (nodeCount > 0) {
 						flat_nodes_storage[idx1D].resize(nodeCount);
@@ -528,6 +538,9 @@ namespace osm {
 						file.read(reinterpret_cast<char*>(flat_ways_storage[idx1D].data()), wayCount * sizeof(Packed_Way_Header));
 					}
 					file.read(reinterpret_cast<char*>(BucketArray[idx1D].data()), bucketCount * sizeof(uint16_t));
+
+					file.read(reinterpret_cast<char*>(heightmap_storage.GetAtIndex_modifiable(idx1D).data()),
+						heightmapCoeffCount * sizeof(FFT2D::FourierTerm));
 				}
 			}
 			file.close();

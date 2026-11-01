@@ -30,6 +30,12 @@ static std::string GetQuery(double lat0, double lon0, double lat1, double lon1) 
 		"out body geom;";
 }
 
+static std::string GetHeightmapQuery(double lat0, double lon0, double lat1, double lon1) {
+	// Here we return the query for OpenTopoData API
+
+	return "";
+}
+
 int main() {
 
 	std::filesystem::create_directories("ChunkData");
@@ -47,6 +53,8 @@ int main() {
 	transformer T;
 
 	osm::OSM_Parser_Storage parser;
+
+	Heightmap_Storage chunk_heightmaps(64, 16);
 
 	auto init_chk = chunk_manager.MakeChunk_at(xi_global, yi_global, nullptr);
 	int _x0 = init_chk.Bounds_m.x0;
@@ -77,7 +85,13 @@ int main() {
 
 
 			// Query smaller area to reduce response times
-			std::string query = GetQuery(sub_min_lat, sub_min_lon, sub_max_lat, sub_max_lon);
+			const std::string& query = GetQuery(sub_min_lat, sub_min_lon, sub_max_lat, sub_max_lon);
+
+			// Heightmap query
+			const std::string& heightmap_query = 
+				GetHeightmapQuery(sub_min_lat, sub_min_lon, sub_max_lat, sub_max_lon);
+
+			chunk_heightmaps.ComputeHeightmapForChunk("json response", i, j); ///////////////////////////
 
 			// Response from query
 			std::string readBuffer = wrapper.PostUrl(url, query);
@@ -102,13 +116,13 @@ int main() {
 
 	std::cout << "Writing Packed OSM data ...\n";
 
-	osmpack.WriteToDisk("ChunkData", parser.Get__name_buffer());
+	osmpack.WriteToDisk("ChunkData", parser.Get__name_buffer(), chunk_heightmaps);
 
 	std::cout << "Write complete ...\n";
 
 	osm::NameBuffer out_names;
 		
-	osmpack.ReadFromDisk("ChunkData", out_names);
+	osmpack.ReadFromDisk("ChunkData", out_names, chunk_heightmaps);
 
 	std::cout << out_names.size() << " Unique Road Names\n";
 
@@ -124,8 +138,7 @@ int main() {
 			// Extract indices purely within the local 256 matrix limits
 			int subX = i & 0xF;
 			int subZ = (i >> 4) & 0xF;
-
-			// Human readable print logs tracking your targeted 9,4 bounds region
+			
 			fout << "WAYCHK: [Mega " << xi_global << "," << yi_global << "] "
 				<< "-> [Sub " << subX << "," << subZ << "] "
 				<< "(Local Idx: " << i << ") | "

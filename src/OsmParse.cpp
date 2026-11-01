@@ -180,6 +180,6 @@ void OSM_Parser_Storage::ParseJSON(const std::string & rawJsonString) {
         std::cerr << "JSON Exception: " << e.what() << "\n";
     }
 
-    std::cout << "TRAM NUMBER: " << tram_number << " " << "RAIL NUMBER: " << rail_number
-        << " UNDER CONSTRUCTION: " << construction_number << "\n";
+    //std::cout << "TRAM NUMBER: " << tram_number << " " << "RAIL NUMBER: " << rail_number
+    //    << " UNDER CONSTRUCTION: " << construction_number << "\n";
 }
