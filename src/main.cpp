@@ -8,7 +8,8 @@
 
 #include <string>
 #include <filesystem>
-
+#include <chrono>
+#include <thread>
 
 #include <fstream>
 
@@ -32,8 +33,25 @@ static std::string GetQuery(double lat0, double lon0, double lat1, double lon1) 
 
 static std::string GetHeightmapQuery(double lat0, double lon0, double lat1, double lon1) {
 	// Here we return the query for OpenTopoData API
+	std::string locations = "";
+	const int res = 16;
+	for (int x = 0; x < res; x++) {
+		for (int y = 0; y < res; y++) {
+			float fx = float(x) / float(res-1);
+			float fy = float(y) / float(res-1);
+			float flat = lat0 * (1 - fy) + lat1 * fy;
+			float flon = lon0 * (1 - fx) + lon1 * fx;
+			locations += std::format("{:.6f},{:.6f}", flat, flon);
+			if (!(x == res - 1 && y == res - 1)) {
+				locations += "|";
+			}
+		}
+	}
+	using json = nlohmann::json;
+	json request_json;
+	request_json["locations"] = locations;
 
-	return "";
+	return request_json.dump();
 }
 
 int main() {
@@ -43,6 +61,7 @@ int main() {
 	curl_global_init(CURL_GLOBAL_DEFAULT);
 
 	std::string url = "http://localhost:12345/api/interpreter";
+	std::string url_elevation = "http://localhost:5000/v1/ro_srtm30m?locations=";
 	
 	CurlWrapper wrapper;
 
@@ -91,16 +110,26 @@ int main() {
 			const std::string& heightmap_query = 
 				GetHeightmapQuery(sub_min_lat, sub_min_lon, sub_max_lat, sub_max_lon);
 
-			chunk_heightmaps.ComputeHeightmapForChunk("json response", i, j); ///////////////////////////
-
 			// Response from query
 			std::string readBuffer = wrapper.PostUrl(url, query);
 
 			if (!readBuffer.empty() && readBuffer[0] == '<') {
-				std::cerr << "Received HTML instead of JSON \n";
+				std::cerr << "[VECTOR_BUFFER] Received HTML instead of JSON \n";
+				// try again after 50 ms
+				std::this_thread::sleep_for(std::chrono::milliseconds(50));
+				readBuffer = wrapper.PostUrl(url, query);
 			}
 
 			parser.ParseJSON(readBuffer);
+
+			// Response from elevation query
+			std::string elv_readBuffer = wrapper.PostUrl(url_elevation, heightmap_query);
+
+			if (!elv_readBuffer.empty() && elv_readBuffer[0] == '<') {
+				std::cerr << "[ELEVATION_BUFFER] Received HTML instead of JSON \n";
+			}
+
+			chunk_heightmaps.ComputeHeightmapForChunk(elv_readBuffer, i, j);
 
 			//std::cout << parser.get_node_counter()<<" unique nodes \n";
 

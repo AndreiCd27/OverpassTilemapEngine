@@ -21,19 +21,45 @@ public:
 	}
 
 	std::vector<std::vector<float>> ParseHeightmap(const std::string& json_response) {
+
+		using json = nlohmann::json;
+
 		// Here we parse the json response from local OpenTopoData API
 
-		// Return sample data for testing
-		int res = 64;
-		std::vector<std::vector<float>> matrix(res);
-		for (int i = 0; i < res; i++) {
-			std::vector<float>& row = matrix[i];
-			for (int j = 0; j < res; j++) {
-				float pseudo_rand = float((i * 21783 + j * 2913) % 1781) / 401.0f;
-				matrix[i].push_back(pseudo_rand);
+		const int res = 16;
+
+		std::vector<std::vector<float>> matrix(res, std::vector(res, 0.0f));
+
+		try {
+			json data = json::parse(json_response);
+
+			if (data.contains("results") && data["results"].is_array()) {
+
+				auto& results_array = data["results"];
+				int index = 0;
+
+				for (int i = 0; i < res; i++) {
+					for (int j = 0; j < res; j++) {
+						
+						if (index < results_array.size()) {
+
+							float elevation = results_array[index].value("elevation", 0.0f);
+
+							matrix[i][j] = elevation;
+							index++;
+						}
+					}
+				}
+			}
+			else {
+				std::cout << "Invalid JSON response (Error)" << std::endl;
+				std::cout << json_response << std::endl;
 			}
 		}
-
+		catch (const json::parse_error& e) {
+			std::cerr << "Erorr parsing JSON response from OpenTopoData: " << e.what() << "\n";
+			std::cout << json_response << std::endl;
+		}
 		return matrix;
 	}
 

@@ -17,6 +17,8 @@ Organizing roads in a quadtree-like structure, allowing fast streaming of geogra
 Using the local endpoint for fast queries at large scale, targeting highways, streets and footways
 ### LZ4 Compression on binary files
 Using LZ4 to compress road data and road-name buffers even more, achieving about 30-50% reduction in file size
+### Terrain queries for map elevation
+Using OpenTopoData API locally using Docker to get elevation data
 
 ## Setup
 
@@ -47,9 +49,54 @@ After the command finished, check it was created and the ngnix deamon started, r
 docker logs -f your_overpass_instance_name
 ```
 
+### Create the OpenTopoData API container
+
+Clone the opentopodata repository and run make to automatically create the container
+```
+git clone https://github.com/ajnisbet/opentopodata.git
+cd opentopodata
+make build && make run
+```
+To test it works, you can test queries at v1/test-dataset
+```
+curl https://localhost:5000/v1/test-dataset?locations=56.35,123.90
+```
+To get real elevation data, download a GeoTIFF file of your selected latitude & longitude bounding box,
+from https://portal.opentopography.org/
+
+In this project, SRTM30m is used, for Romania. You need to create a config.yaml file in the container that points to your file
+```
+
+# 400 error will be thrown above this limit.
+max_locations_per_request: 512
+
+access_control_allow_origin: "*"
+
+datasets:
+
+# Romania topography dataset
+- name: ro_srtm30m
+  path: data/RO_SRTMGL1/
+
+# Example config for 90 metre SRTM.
+# - name: srtm90m
+#   path: data/srtm-90m-nasa-v3.0/
+#   filename_epsg: 4326  # This is the default value.
+#   filename_tile_size: 1  # This is the default value.
+
+```
+
+Now rebuild the docker container, you might need to run ```docker ps``` and ```docker stop [your_container_id]```
+and then ```make build && make run```
+
 ### Build process
 
-Simply run the CMakelists.txt file
+Simply run the CMakelists.txt file with vcpkg toolchain
+```
+cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE="path/to/vcpkg.cmake"
+cmake --build build
+```
+
 (Testing on Linux and MacOS for compatibility soon)
 
 ### Rendering
